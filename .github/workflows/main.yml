@@ -23,13 +23,42 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Extract Almusic project ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "almusic.zip" ]; then
+            echo "::error::almusic.zip was not found in the repository root."
+            ls -la
+            exit 1
+          fi
+
+          rm -rf /tmp/almusic-unpacked
+          mkdir -p /tmp/almusic-unpacked
+          unzip -q -o almusic.zip -d /tmp/almusic-unpacked
+
+          SETTINGS_FILE="$(find /tmp/almusic-unpacked -type f -name settings.gradle -print -quit)"
+          if [ -z "$SETTINGS_FILE" ]; then
+            SETTINGS_FILE="$(find /tmp/almusic-unpacked -type f -name settings.gradle.kts -print -quit)"
+          fi
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::No settings.gradle or settings.gradle.kts found inside almusic.zip."
+            find /tmp/almusic-unpacked -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          echo "Using project folder: $PROJECT_DIR"
+          cp -a "$PROJECT_DIR"/. "$GITHUB_WORKSPACE"/
+
       - name: Check project files
         run: |
-          test -f settings.gradle
-          test -f build.gradle
-          test -f app/build.gradle
+          set -e
+          test -f settings.gradle || test -f settings.gradle.kts
+          test -f build.gradle || test -f build.gradle.kts
+          test -f app/build.gradle || test -f app/build.gradle.kts
           test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/com/alipp/almusic/MainActivity.kt
+          echo "Project structure looks OK."
 
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
@@ -40,4 +69,3 @@ jobs:
           name: Almusic-debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          
